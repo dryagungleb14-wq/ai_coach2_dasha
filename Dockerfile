@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
 COPY backend/ .
 
 EXPOSE 8000
+RUN echo 'Cache invalidation: Nov 10 2025'
 
 CMD ["sh", "-c", "uvi["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port 8000"]
 
