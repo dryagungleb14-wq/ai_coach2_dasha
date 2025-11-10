@@ -72,15 +72,12 @@ def transcribe_audio(audio_path: str, enable_diarization: bool = None) -> str:
     
     logger.info(f"Начало транскрипции файла: {audio_path}")
     
-    compressed_path = compress_audio(audio_path)
-    use_compressed = compressed_path != audio_path
-    
     model = load_model()
     logger.info("Выполнение транскрипции Whisper...")
     
     try:
         result = model.transcribe(
-            compressed_path,
+            audio_path,
             language="ru",
             verbose=False,
             task="transcribe"
@@ -91,13 +88,6 @@ def transcribe_audio(audio_path: str, enable_diarization: bool = None) -> str:
         import traceback
         logger.error(traceback.format_exc())
         raise
-    finally:
-        if use_compressed and os.path.exists(compressed_path):
-            try:
-                os.remove(compressed_path)
-                logger.info("Временный сжатый файл удален")
-            except:
-                pass
     
     if not enable_diarization:
         logger.info("Диарризация отключена, используется простая транскрипция")
