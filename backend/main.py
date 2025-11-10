@@ -1,6 +1,8 @@
 import sys
 import os
 import logging
+import time
+from fastapi import Request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -9,10 +11,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.routes import router
 from models import init_db
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AI Coach API", version="1.0.0")
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    logger.info(f"Входящий запрос: {request.method} {request.url.path}")
+    response = await call_next(request)
+    process_time = time.time() - start_time
+    logger.info(f"Запрос {request.method} {request.url.path} выполнен за {process_time:.2f}с, статус: {response.status_code}")
+    return response
 
 app.add_middleware(
     CORSMiddleware,
