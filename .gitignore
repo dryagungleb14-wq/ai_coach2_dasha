@@ -25,4 +25,6 @@ frontend/.env.local
 *.log
 /tmp/
 
+start.sh
+
 
