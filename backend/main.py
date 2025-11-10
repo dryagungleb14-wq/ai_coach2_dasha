@@ -1,6 +1,8 @@
 import sys
 import os
 import logging
+import logging.config
+import json
 import time
 from fastapi import Request
 
@@ -13,10 +15,15 @@ from models import init_db
 from services.websocket_service import manager
 from config import GEMINI_API_KEY, DATABASE_URL
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logging_config.json")
+with open(config_path, "r") as f:
+    log_config = json.load(f)
+    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    log_config["root"]["level"] = log_level
+    for logger_name in log_config.get("loggers", {}):
+        log_config["loggers"][logger_name]["level"] = log_level
+    logging.config.dictConfig(log_config)
+
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AI Coach API", version="1.0.0")

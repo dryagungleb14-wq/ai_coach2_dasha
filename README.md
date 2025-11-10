@@ -127,6 +127,38 @@ npm run dev
 
 ### Логирование
 
+#### Формат логов
+
+Приложение использует JSON-формат логов для совместимости с Railway. Все логи выводятся в stdout в формате JSON с полем `severity` вместо `levelname`.
+
+#### Локальное тестирование
+
+Для проверки формата логов локально:
+
+```bash
+cd backend
+python -c "import logging; import logging.config; import json; f = open('logging_config.json'); config = json.load(f); f.close(); logging.config.dictConfig(config); logging.info('Test log message')"
+```
+
+Вывод должен быть JSON с полями:
+- `severity`: уровень лога (INFO, ERROR, WARNING и т.д.)
+- `timestamp`: время в формате ISO
+- `logger`: имя логгера
+- `message`: текст сообщения
+
+#### Переменные окружения
+
+- `LOG_LEVEL`: уровень логирования (по умолчанию: INFO). Возможные значения: DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+#### Railway
+
+Railway автоматически парсит JSON-логи и отображает их в интерфейсе. Уровень лога определяется полем `severity`:
+- `INFO`, `DEBUG` → обычные сообщения (не красные)
+- `ERROR`, `CRITICAL` → ошибки (красные)
+- `WARNING` → предупреждения (желтые)
+
+#### Фронтенд логирование
+
 - В режиме разработки (`NODE_ENV=development`) API URL логируется в консоль браузера
 - Все ошибки подключения логируются с детальной информацией (URL, тип ошибки)
 - Проверьте консоль браузера (F12) для диагностики проблем
