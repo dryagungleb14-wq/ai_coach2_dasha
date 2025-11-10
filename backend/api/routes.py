@@ -9,6 +9,8 @@ import uuid
 import csv
 import io
 import logging
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -119,8 +121,17 @@ async def analyze_call(call_id: int, db: Session = Depends(get_db)):
         
         logger.info(f"Начало транскрипции файла {audio_path}")
         try:
-            transcription = transcribe_audio(audio_path)
+            loop = asyncio.get_event_loop()
+            executor = ThreadPoolExecutor(max_workers=1)
+            logger.info("Запуск транскрипции в отдельном потоке...")
+            transcription = await asyncio.wait_for(
+                loop.run_in_executor(executor, transcribe_audio, audio_path),
+                timeout=600.0
+            )
             logger.info(f"Транскрипция завершена, длина текста: {len(transcription) if transcription else 0} символов")
+        except asyncio.TimeoutError:
+            logger.error("Транскрипция превысила таймаут 10 минут")
+            raise HTTPException(status_code=504, detail="Транскрипция заняла слишком много времени. Попробуйте позже или используйте более короткий файл.")
         except Exception as e:
             logger.error(f"Ошибка при транскрипции: {e}")
             import traceback

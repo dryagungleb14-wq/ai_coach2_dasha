@@ -20,9 +20,15 @@ def load_model():
 def transcribe_audio(audio_path: str) -> str:
     logger.info(f"Начало транскрипции файла: {audio_path}")
     model = load_model()
-    logger.info("Выполнение транскрипции...")
-    result = model.transcribe(audio_path, language="ru")
-    logger.info("Транскрипция Whisper завершена")
+    logger.info("Выполнение транскрипции Whisper...")
+    try:
+        result = model.transcribe(audio_path, language="ru")
+        logger.info("Транскрипция Whisper завершена успешно")
+    except Exception as e:
+        logger.error(f"Ошибка при выполнении транскрипции Whisper: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise
     
     hf_token = os.environ.get("HUGGINGFACE_TOKEN")
     
