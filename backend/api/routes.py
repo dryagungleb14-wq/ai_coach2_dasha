@@ -32,48 +32,58 @@ async def upload_files(
     call_identifier: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
+    if not files:
+        raise HTTPException(status_code=400, detail="Не указаны файлы для загрузки")
+    
     uploaded_calls = []
     
     for file in files:
-        if not file.content_type.startswith("audio/"):
+        if not file.content_type or not file.content_type.startswith("audio/"):
             continue
         
-        file_id = str(uuid.uuid4())
-        filename = f"{file_id}_{file.filename}"
-        uploads_dir = "uploads"
-        os.makedirs(uploads_dir, exist_ok=True)
-        file_path = os.path.join(uploads_dir, filename)
-        
-        with open(file_path, "wb") as f:
-            content = await file.read()
-            f.write(content)
-        
-        call_date_obj = None
-        if call_date:
-            try:
-                call_date_obj = datetime.fromisoformat(call_date.replace("Z", "+00:00"))
-            except:
-                pass
-        
-        call = Call(
-            filename=file.filename,
-            audio_url=file_path,
-            manager=manager,
-            call_date=call_date_obj,
-            call_identifier=call_identifier
-        )
-        
-        db.add(call)
-        db.commit()
-        db.refresh(call)
-        
-        uploaded_calls.append({
-            "id": call.id,
-            "filename": call.filename,
-            "manager": call.manager,
-            "call_date": call.call_date.isoformat() if call.call_date else None,
-            "call_identifier": call.call_identifier
-        })
+        try:
+            file_id = str(uuid.uuid4())
+            filename = f"{file_id}_{file.filename}"
+            uploads_dir = "uploads"
+            os.makedirs(uploads_dir, exist_ok=True)
+            file_path = os.path.join(uploads_dir, filename)
+            
+            with open(file_path, "wb") as f:
+                content = await file.read()
+                f.write(content)
+            
+            call_date_obj = None
+            if call_date:
+                try:
+                    call_date_obj = datetime.fromisoformat(call_date.replace("Z", "+00:00"))
+                except:
+                    pass
+            
+            call = Call(
+                filename=file.filename,
+                audio_url=file_path,
+                manager=manager,
+                call_date=call_date_obj,
+                call_identifier=call_identifier
+            )
+            
+            db.add(call)
+            db.commit()
+            db.refresh(call)
+            
+            uploaded_calls.append({
+                "id": call.id,
+                "filename": call.filename,
+                "manager": call.manager,
+                "call_date": call.call_date.isoformat() if call.call_date else None,
+                "call_identifier": call.call_identifier
+            })
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Ошибка при загрузке файла {file.filename}: {str(e)}")
+    
+    if not uploaded_calls:
+        raise HTTPException(status_code=400, detail="Не удалось загрузить ни один файл. Убедитесь, что файлы имеют аудио формат.")
     
     return {"calls": uploaded_calls}
 

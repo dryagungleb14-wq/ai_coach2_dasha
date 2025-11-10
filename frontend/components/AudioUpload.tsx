@@ -46,9 +46,10 @@ export default function AudioUpload({ onUploadComplete }: AudioUploadProps) {
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Upload error:", error);
-      alert("Ошибка загрузки файлов");
+      const errorMessage = error?.message || "Ошибка загрузки файлов";
+      alert(errorMessage);
     } finally {
       setUploading(false);
     }

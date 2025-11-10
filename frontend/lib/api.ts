@@ -45,17 +45,32 @@ export async function uploadFiles(
   if (callDate) formData.append("call_date", callDate);
   if (callIdentifier) formData.append("call_identifier", callIdentifier);
   
-  const response = await fetch(`${API_URL}/api/upload`, {
-    method: "POST",
-    body: formData,
-  });
-  
-  if (!response.ok) {
-    throw new Error("Upload failed");
+  try {
+    const response = await fetch(`${API_URL}/api/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorMessage = "Ошибка загрузки файлов";
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.detail || errorMessage;
+      } catch {
+        errorMessage = errorText || errorMessage;
+      }
+      throw new Error(errorMessage);
+    }
+    
+    const data = await response.json();
+    return data.calls;
+  } catch (error: any) {
+    if (error.message.includes("Failed to fetch")) {
+      throw new Error("Не удалось подключиться к серверу. Убедитесь, что бэкенд запущен.");
+    }
+    throw error;
   }
-  
-  const data = await response.json();
-  return data.calls;
 }
 
 export async function analyzeCall(callId: number): Promise<any> {
