@@ -15,5 +15,5 @@ COPY . .
 EXPOSE 8000
 
 # Используем переменную PORT из окружения (Railway установит её автоматически)
-# Используем exec для замены shell процесса на uvicorn и правильной подстановки PORT
-CMD exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} 2>&1
+# Используем shell форму с правильной подстановкой переменной
+CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port \"${PORT:-8000}\" 2>&1"]
