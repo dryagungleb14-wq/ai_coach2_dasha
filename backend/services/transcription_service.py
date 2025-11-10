@@ -12,12 +12,17 @@ _model = None
 def load_model():
     global _model
     if _model is None:
+        logger.info("Загрузка модели Whisper 'base'...")
         _model = whisper.load_model("base")
+        logger.info("Модель Whisper загружена успешно")
     return _model
 
 def transcribe_audio(audio_path: str) -> str:
+    logger.info(f"Начало транскрипции файла: {audio_path}")
     model = load_model()
+    logger.info("Выполнение транскрипции...")
     result = model.transcribe(audio_path, language="ru")
+    logger.info("Транскрипция Whisper завершена")
     
     hf_token = os.environ.get("HUGGINGFACE_TOKEN")
     

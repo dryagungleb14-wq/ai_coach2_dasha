@@ -8,6 +8,7 @@ import sys
 import uuid
 import csv
 import io
+import logging
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -15,6 +16,7 @@ from models import Call, Evaluation, SessionLocal, init_db
 from services.transcription_service import transcribe_audio
 from services.evaluation_service import evaluate_transcription
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 def get_db():
@@ -90,11 +92,14 @@ async def upload_files(
 @router.post("/analyze/{call_id}")
 async def analyze_call(call_id: int, db: Session = Depends(get_db)):
     try:
+        logger.info(f"Начало анализа звонка {call_id}")
         call = db.query(Call).filter(Call.id == call_id).first()
         if not call:
+            logger.error(f"Звонок {call_id} не найден")
             raise HTTPException(status_code=404, detail="Call not found")
         
         if not call.audio_url:
+            logger.error(f"У звонка {call_id} нет audio_url")
             raise HTTPException(status_code=400, detail="Audio file not found")
         
         audio_path = call.audio_url
@@ -102,17 +107,39 @@ async def analyze_call(call_id: int, db: Session = Depends(get_db)):
             backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             audio_path = os.path.join(backend_dir, audio_path)
         
+        logger.info(f"Путь к аудио файлу: {audio_path}")
+        
         if not os.path.exists(audio_path):
+            logger.error(f"Аудио файл не найден по пути: {audio_path}")
             raise HTTPException(status_code=400, detail=f"Audio file not found at {audio_path}")
         
         if not os.path.isfile(audio_path):
+            logger.error(f"Путь не является файлом: {audio_path}")
             raise HTTPException(status_code=400, detail=f"Audio path is not a file: {audio_path}")
         
-        transcription = transcribe_audio(audio_path)
+        logger.info(f"Начало транскрипции файла {audio_path}")
+        try:
+            transcription = transcribe_audio(audio_path)
+            logger.info(f"Транскрипция завершена, длина текста: {len(transcription) if transcription else 0} символов")
+        except Exception as e:
+            logger.error(f"Ошибка при транскрипции: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            raise HTTPException(status_code=500, detail=f"Ошибка при транскрипции аудио: {str(e)}")
+        
         call.transcription = transcription
         db.commit()
+        logger.info("Транскрипция сохранена в БД")
         
-        evaluation_result = evaluate_transcription(transcription)
+        logger.info("Начало оценки транскрипции")
+        try:
+            evaluation_result = evaluate_transcription(transcription)
+            logger.info(f"Оценка завершена, итоговый балл: {evaluation_result.get('итоговая_оценка', 'N/A')}")
+        except Exception as e:
+            logger.error(f"Ошибка при оценке: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            raise HTTPException(status_code=500, detail=f"Ошибка при оценке звонка: {str(e)}")
         
         evaluation = Evaluation(
             call_id=call_id,
@@ -126,6 +153,7 @@ async def analyze_call(call_id: int, db: Session = Depends(get_db)):
         db.add(evaluation)
         db.commit()
         db.refresh(evaluation)
+        logger.info(f"Анализ звонка {call_id} успешно завершен")
         
         return {
             "call_id": call_id,
@@ -142,8 +170,10 @@ async def analyze_call(call_id: int, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         import traceback
+        logger.error(f"Критическая ошибка при анализе звонка {call_id}: {e}")
+        logger.error(traceback.format_exc())
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Error during analysis: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ошибка при анализе: {str(e)}")
 
 @router.post("/analyze/{call_id}/retest")
 async def retest_call(call_id: int, db: Session = Depends(get_db)):
