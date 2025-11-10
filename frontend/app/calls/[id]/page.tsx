@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getCall, analyzeCall, retestCall, CallDetail, exportCall } from "@/lib/api";
+import { getCall, analyzeCall, retestCall, CallDetail, exportCall, getAnalyzeStatus } from "@/lib/api";
 import EvaluationTable from "@/components/EvaluationTable";
 
 export default function CallDetailPage() {
@@ -13,10 +13,41 @@ export default function CallDetailPage() {
   const [call, setCall] = useState<CallDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     loadCall();
   }, [callId]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    
+    if (analyzing) {
+      interval = setInterval(async () => {
+        try {
+          const status = await getAnalyzeStatus(callId);
+          setProgress(status.progress);
+          
+          if (status.status === "completed") {
+            setAnalyzing(false);
+            if (interval) clearInterval(interval);
+            await loadCall();
+          } else if (status.status === "failed") {
+            setAnalyzing(false);
+            if (interval) clearInterval(interval);
+            alert("Ошибка при анализе. Попробуйте еще раз.");
+            await loadCall();
+          }
+        } catch (error) {
+          console.error("Error checking status:", error);
+        }
+      }, 2000);
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [analyzing, callId]);
 
   const loadCall = async () => {
     try {
@@ -33,14 +64,13 @@ export default function CallDetailPage() {
 
   const handleAnalyze = async () => {
     setAnalyzing(true);
+    setProgress(0);
     try {
       await analyzeCall(callId);
-      await loadCall();
     } catch (error: any) {
       console.error("Error analyzing:", error);
       const errorMessage = error?.message || "Ошибка анализа";
       alert(`Ошибка анализа: ${errorMessage}`);
-    } finally {
       setAnalyzing(false);
     }
   };
@@ -90,13 +120,30 @@ export default function CallDetailPage() {
 
       <div className="mb-6">
         {!call.transcription ? (
-          <button
-            onClick={handleAnalyze}
-            disabled={analyzing}
-            className="px-4 py-2 bg-black text-white rounded disabled:bg-gray-400"
-          >
-            {analyzing ? "Анализ..." : "Запустить анализ"}
-          </button>
+          <div>
+            <button
+              onClick={handleAnalyze}
+              disabled={analyzing}
+              className="px-4 py-2 bg-black text-white rounded disabled:bg-gray-400 mb-4"
+            >
+              {analyzing ? "Анализ..." : "Запустить анализ"}
+            </button>
+            
+            {analyzing && (
+              <div className="mt-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-gray-600">Прогресс анализа</span>
+                  <span className="text-sm text-gray-600">{progress}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                  <div
+                    className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                    style={{ width: `${progress}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+          </div>
         ) : (
           <div className="flex gap-2">
             <button

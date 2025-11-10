@@ -86,6 +86,16 @@ export async function analyzeCall(callId: number): Promise<any> {
   return response.json();
 }
 
+export async function getAnalyzeStatus(callId: number): Promise<{status: string, progress: number}> {
+  const response = await fetch(`${API_URL}/api/analyze/${callId}/status`);
+  
+  if (!response.ok) {
+    throw new Error(`Failed to get status: ${response.status}`);
+  }
+  
+  return response.json();
+}
+
 export async function retestCall(callId: number): Promise<any> {
   const response = await fetch(`${API_URL}/api/analyze/${callId}/retest`, {
     method: "POST",

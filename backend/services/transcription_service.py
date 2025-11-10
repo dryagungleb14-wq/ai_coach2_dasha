@@ -75,9 +75,11 @@ def transcribe_audio(audio_path: str, enable_diarization: bool = None) -> str:
     model = load_model()
     logger.info("Выполнение транскрипции Whisper...")
     
+    compressed_path = compress_audio(audio_path)
+    
     try:
         result = model.transcribe(
-            audio_path,
+            compressed_path,
             language="ru",
             verbose=False,
             task="transcribe"
@@ -136,7 +138,7 @@ def transcribe_audio(audio_path: str, enable_diarization: bool = None) -> str:
             logger.info("Используется CPU для диарризации")
         
         logger.info("Выполнение диарризации...")
-        diarization = pipeline(audio_path, min_speakers=2, max_speakers=2)
+        diarization = pipeline(compressed_path, min_speakers=2, max_speakers=2)
         
         segments = result.get("segments", [])
         logger.info(f"Найдено {len(segments)} сегментов транскрипции")

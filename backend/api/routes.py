@@ -10,6 +10,7 @@ import csv
 import io
 import logging
 import asyncio
+import threading
 from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -91,6 +92,79 @@ async def upload_files(
     
     return {"calls": uploaded_calls}
 
+def update_progress(call_id: int, progress: int, status: str = None):
+    db_local = SessionLocal()
+    try:
+        call_local = db_local.query(Call).filter(Call.id == call_id).first()
+        if call_local:
+            call_local.progress = progress
+            if status:
+                call_local.status = status
+            db_local.commit()
+    except Exception as e:
+        logger.error(f"Ошибка обновления прогресса: {e}")
+    finally:
+        db_local.close()
+
+def analyze_in_background(call_id: int, audio_path: str):
+    try:
+        update_progress(call_id, 10, "processing")
+        logger.info(f"Начало транскрипции файла {audio_path}")
+        
+        transcription = transcribe_audio(audio_path)
+        
+        update_progress(call_id, 90, "processing")
+        logger.info(f"Транскрипция завершена, длина текста: {len(transcription) if transcription else 0} символов")
+        
+        db_local = SessionLocal()
+        try:
+            call_local = db_local.query(Call).filter(Call.id == call_id).first()
+            if call_local:
+                call_local.transcription = transcription
+                db_local.commit()
+                logger.info("Транскрипция сохранена в БД")
+        finally:
+            db_local.close()
+        
+        update_progress(call_id, 95, "processing")
+        logger.info("Начало оценки транскрипции")
+        
+        evaluation_result = evaluate_transcription(transcription)
+        logger.info(f"Оценка завершена, итоговый балл: {evaluation_result.get('итоговая_оценка', 'N/A')}")
+        
+        db_local = SessionLocal()
+        try:
+            call_local = db_local.query(Call).filter(Call.id == call_id).first()
+            if call_local:
+                evaluation = Evaluation(
+                    call_id=call_id,
+                    scores=evaluation_result["scores"],
+                    итоговая_оценка=evaluation_result["итоговая_оценка"],
+                    нарушения=evaluation_result["нарушения"],
+                    комментарии=evaluation_result["комментарии"],
+                    is_retest=False
+                )
+                db_local.add(evaluation)
+                call_local.status = "completed"
+                call_local.progress = 100
+                db_local.commit()
+                logger.info(f"Анализ звонка {call_id} успешно завершен")
+        finally:
+            db_local.close()
+            
+    except Exception as e:
+        import traceback
+        logger.error(f"Ошибка в фоновой задаче: {e}")
+        logger.error(traceback.format_exc())
+        db_local = SessionLocal()
+        try:
+            call_local = db_local.query(Call).filter(Call.id == call_id).first()
+            if call_local:
+                call_local.status = "failed"
+                db_local.commit()
+        finally:
+            db_local.close()
+
 @router.post("/analyze/{call_id}")
 async def analyze_call(call_id: int, db: Session = Depends(get_db)):
     try:
@@ -119,63 +193,18 @@ async def analyze_call(call_id: int, db: Session = Depends(get_db)):
             logger.error(f"Путь не является файлом: {audio_path}")
             raise HTTPException(status_code=400, detail=f"Audio path is not a file: {audio_path}")
         
-        logger.info(f"Начало транскрипции файла {audio_path}")
-        try:
-            loop = asyncio.get_event_loop()
-            executor = ThreadPoolExecutor(max_workers=1)
-            logger.info("Запуск транскрипции в отдельном потоке...")
-            transcription = await asyncio.wait_for(
-                loop.run_in_executor(executor, transcribe_audio, audio_path),
-                timeout=600.0
-            )
-            logger.info(f"Транскрипция завершена, длина текста: {len(transcription) if transcription else 0} символов")
-        except asyncio.TimeoutError:
-            logger.error("Транскрипция превысила таймаут 10 минут")
-            raise HTTPException(status_code=504, detail="Транскрипция заняла слишком много времени. Попробуйте позже или используйте более короткий файл.")
-        except Exception as e:
-            logger.error(f"Ошибка при транскрипции: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            raise HTTPException(status_code=500, detail=f"Ошибка при транскрипции аудио: {str(e)}")
-        
-        call.transcription = transcription
+        call.status = "processing"
+        call.progress = 0
         db.commit()
-        logger.info("Транскрипция сохранена в БД")
         
-        logger.info("Начало оценки транскрипции")
-        try:
-            evaluation_result = evaluate_transcription(transcription)
-            logger.info(f"Оценка завершена, итоговый балл: {evaluation_result.get('итоговая_оценка', 'N/A')}")
-        except Exception as e:
-            logger.error(f"Ошибка при оценке: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            raise HTTPException(status_code=500, detail=f"Ошибка при оценке звонка: {str(e)}")
-        
-        evaluation = Evaluation(
-            call_id=call_id,
-            scores=evaluation_result["scores"],
-            итоговая_оценка=evaluation_result["итоговая_оценка"],
-            нарушения=evaluation_result["нарушения"],
-            комментарии=evaluation_result["комментарии"],
-            is_retest=False
-        )
-        
-        db.add(evaluation)
-        db.commit()
-        db.refresh(evaluation)
-        logger.info(f"Анализ звонка {call_id} успешно завершен")
+        thread = threading.Thread(target=analyze_in_background, args=(call_id, audio_path), daemon=True)
+        thread.start()
         
         return {
             "call_id": call_id,
-            "transcription": transcription,
-            "evaluation": {
-                "id": evaluation.id,
-                "scores": evaluation.scores,
-                "итоговая_оценка": evaluation.итоговая_оценка,
-                "нарушения": evaluation.нарушения,
-                "комментарии": evaluation.комментарии
-            }
+            "status": "processing",
+            "progress": 0,
+            "message": "Анализ начат, проверяйте статус через /api/analyze/{call_id}/status"
         }
     except HTTPException:
         raise
@@ -185,6 +214,18 @@ async def analyze_call(call_id: int, db: Session = Depends(get_db)):
         logger.error(traceback.format_exc())
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Ошибка при анализе: {str(e)}")
+
+@router.get("/analyze/{call_id}/status")
+async def get_analyze_status(call_id: int, db: Session = Depends(get_db)):
+    call = db.query(Call).filter(Call.id == call_id).first()
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    
+    return {
+        "call_id": call_id,
+        "status": call.status or "pending",
+        "progress": call.progress or 0
+    }
 
 @router.post("/analyze/{call_id}/retest")
 async def retest_call(call_id: int, db: Session = Depends(get_db)):

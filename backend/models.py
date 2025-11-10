@@ -28,6 +28,8 @@ class Call(Base):
     call_date = Column(DateTime)
     call_identifier = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String, default="pending")
+    progress = Column(Integer, default=0)
     
     evaluations = relationship("Evaluation", back_populates="call")
 
