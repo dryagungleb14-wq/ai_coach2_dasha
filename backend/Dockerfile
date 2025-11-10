@@ -15,6 +15,5 @@ COPY . .
 EXPOSE 8000
 
 # Используем скрипт запуска для правильной подстановки PORT
-COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 CMD ["/app/start.sh"]
