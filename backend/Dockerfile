@@ -15,5 +15,5 @@ COPY . .
 EXPOSE 8000
 
 # Используем переменную PORT из окружения (Railway установит её автоматически)
-# Если PORT не установлен, используем 8000 по умолчанию
-CMD sh -c "echo 'Запуск uvicorn на порту: ${PORT:-8000}' && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
+# Railway всегда устанавливает PORT, поэтому используем его напрямую
+CMD uvicorn main:app --host 0.0.0.0 --port $PORT
