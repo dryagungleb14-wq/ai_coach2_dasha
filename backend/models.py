@@ -47,6 +47,29 @@ class Evaluation(Base):
     
     call = relationship("Call", back_populates="evaluations")
 
+def migrate_db():
+    from sqlalchemy import text, inspect
+    
+    try:
+        inspector = inspect(engine)
+        columns = [col['name'] for col in inspector.get_columns('calls')]
+        
+        with engine.begin() as conn:
+            if 'status' not in columns:
+                logger.info("Добавление колонки status в таблицу calls")
+                conn.execute(text("ALTER TABLE calls ADD COLUMN status TEXT DEFAULT 'pending'"))
+            
+            if 'progress' not in columns:
+                logger.info("Добавление колонки progress в таблицу calls")
+                conn.execute(text("ALTER TABLE calls ADD COLUMN progress INTEGER DEFAULT 0"))
+    except Exception as e:
+        logger.error(f"Ошибка при проверке структуры таблицы: {e}")
+        raise
+
 def init_db():
     Base.metadata.create_all(bind=engine)
+    try:
+        migrate_db()
+    except Exception as e:
+        logger.warning(f"Ошибка при миграции БД (возможно таблица не существует): {e}")
 
