@@ -52,9 +52,6 @@ async def websocket_analyze(websocket: WebSocket, call_id: int):
 @app.on_event("startup")
 async def startup_event():
     try:
-        port = os.getenv("PORT", "8000")
-        logger.info(f"Запуск приложения на порту: {port}")
-        logger.info(f"Переменная PORT из окружения: {os.getenv('PORT', 'не установлена (используется 8000)')}")
         init_db()
         logger.info("База данных инициализирована")
         import asyncio
