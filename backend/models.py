@@ -3,9 +3,16 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
 from config import DATABASE_URL
+import logging
 
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+logger = logging.getLogger(__name__)
+
+try:
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+except Exception as e:
+    logger.error(f"Ошибка создания engine: {e}")
+    raise
 
 Base = declarative_base()
 

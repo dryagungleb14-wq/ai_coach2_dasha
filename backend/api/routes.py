@@ -40,9 +40,9 @@ async def upload_files(
         
         file_id = str(uuid.uuid4())
         filename = f"{file_id}_{file.filename}"
-        file_path = f"uploads/{filename}"
-        
-        os.makedirs("uploads", exist_ok=True)
+        uploads_dir = "uploads"
+        os.makedirs(uploads_dir, exist_ok=True)
+        file_path = os.path.join(uploads_dir, filename)
         
         with open(file_path, "wb") as f:
             content = await file.read()
@@ -94,6 +94,9 @@ async def analyze_call(call_id: int, db: Session = Depends(get_db)):
         
         if not os.path.exists(audio_path):
             raise HTTPException(status_code=400, detail=f"Audio file not found at {audio_path}")
+        
+        if not os.path.isfile(audio_path):
+            raise HTTPException(status_code=400, detail=f"Audio path is not a file: {audio_path}")
         
         transcription = transcribe_audio(audio_path)
         call.transcription = transcription
