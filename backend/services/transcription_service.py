@@ -1,7 +1,10 @@
 import whisper
 import os
 import logging
+import subprocess
+import tempfile
 from dotenv import load_dotenv
+from config import WHISPER_MODEL, ENABLE_DIARIZATION
 
 load_dotenv()
 
@@ -12,23 +15,102 @@ _model = None
 def load_model():
     global _model
     if _model is None:
-        logger.info("Загрузка модели Whisper 'base'...")
-        _model = whisper.load_model("base")
-        logger.info("Модель Whisper загружена успешно")
+        model_name = WHISPER_MODEL
+        logger.info(f"Загрузка модели Whisper '{model_name}'...")
+        _model = whisper.load_model(model_name)
+        logger.info(f"Модель Whisper '{model_name}' загружена успешно")
     return _model
 
-def transcribe_audio(audio_path: str) -> str:
+def compress_audio(audio_path: str) -> str:
+    logger.info(f"Сжатие и конвертация аудио файла: {audio_path}")
+    
+    temp_dir = tempfile.gettempdir()
+    output_path = os.path.join(temp_dir, f"compressed_{os.path.basename(audio_path)}.wav")
+    
+    try:
+        cmd = [
+            "ffmpeg",
+            "-i", audio_path,
+            "-ar", "16000",
+            "-ac", "1",
+            "-sample_fmt", "s16",
+            "-y",
+            output_path
+        ]
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        
+        if result.returncode != 0:
+            logger.warning(f"Ошибка при сжатии аудио: {result.stderr}")
+            logger.info("Используется оригинальный файл")
+            return audio_path
+        
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            original_size = os.path.getsize(audio_path)
+            compressed_size = os.path.getsize(output_path)
+            logger.info(f"Аудио сжато: {original_size} -> {compressed_size} байт ({compressed_size/original_size*100:.1f}%)")
+            return output_path
+        else:
+            logger.warning("Сжатый файл не создан, используется оригинальный")
+            return audio_path
+            
+    except subprocess.TimeoutExpired:
+        logger.warning("Таймаут при сжатии аудио, используется оригинальный файл")
+        return audio_path
+    except Exception as e:
+        logger.warning(f"Ошибка при сжатии аудио: {e}, используется оригинальный файл")
+        return audio_path
+
+def transcribe_audio(audio_path: str, enable_diarization: bool = None) -> str:
+    if enable_diarization is None:
+        enable_diarization = ENABLE_DIARIZATION
+    
     logger.info(f"Начало транскрипции файла: {audio_path}")
+    
+    compressed_path = compress_audio(audio_path)
+    use_compressed = compressed_path != audio_path
+    
     model = load_model()
     logger.info("Выполнение транскрипции Whisper...")
+    
     try:
-        result = model.transcribe(audio_path, language="ru")
+        result = model.transcribe(
+            compressed_path,
+            language="ru",
+            fp16=False,
+            device="cpu",
+            verbose=False,
+            task="transcribe"
+        )
         logger.info("Транскрипция Whisper завершена успешно")
     except Exception as e:
         logger.error(f"Ошибка при выполнении транскрипции Whisper: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise
+    finally:
+        if use_compressed and os.path.exists(compressed_path):
+            try:
+                os.remove(compressed_path)
+                logger.info("Временный сжатый файл удален")
+            except:
+                pass
+    
+    if not enable_diarization:
+        logger.info("Диарризация отключена, используется простая транскрипция")
+        if "segments" in result and len(result["segments"]) > 0:
+            transcription_parts = []
+            for segment in result["segments"]:
+                text = segment.get("text", "").strip()
+                if text:
+                    transcription_parts.append(text)
+            return "\n".join(transcription_parts)
+        return result["text"]
     
     hf_token = os.environ.get("HUGGINGFACE_TOKEN")
     
