@@ -4,7 +4,7 @@ import os
 import logging
 
 from utils.checklist import get_checklist_prompt
-from config import GEMINI_API_KEY
+from config import GEMINI_API_KEY, GEMINI_EVALUATION_MODEL
 
 genai.configure(api_key=GEMINI_API_KEY)
 
@@ -32,7 +32,7 @@ def evaluate_transcription(transcription: str) -> dict:
     full_prompt = f"{prompt}\n\nРасшифровка звонка:\n\n{transcription}\n\nОцени звонок по чек-листу и верни JSON."
     
     try:
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel(GEMINI_EVALUATION_MODEL)
         response = model.generate_content(
             full_prompt,
             generation_config=genai.types.GenerationConfig(

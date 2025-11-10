@@ -6,10 +6,11 @@ from fastapi import Request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from api.routes import router
 from models import init_db
+from services.websocket_service import manager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,11 +39,26 @@ app.add_middleware(
 
 app.include_router(router, prefix="/api", tags=["api"])
 
+@app.websocket("/ws/analyze/{call_id}")
+async def websocket_analyze(websocket: WebSocket, call_id: int):
+    await manager.connect(websocket, call_id)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, call_id)
+
 @app.on_event("startup")
-def startup_event():
+async def startup_event():
     try:
         init_db()
         logger.info("База данных инициализирована")
+        import asyncio
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.get_event_loop()
+        manager.set_event_loop(loop)
     except Exception as e:
         logger.error(f"Ошибка инициализации БД: {e}")
         raise

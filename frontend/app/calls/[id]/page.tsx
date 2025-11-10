@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getCall, analyzeCall, retestCall, CallDetail, exportCall, getAnalyzeStatus } from "@/lib/api";
+import { getCall, analyzeCall, retestCall, CallDetail, exportCall } from "@/lib/api";
+import { WebSocketClient } from "@/lib/websocket";
 import EvaluationTable from "@/components/EvaluationTable";
 
 export default function CallDetailPage() {
@@ -14,38 +15,50 @@ export default function CallDetailPage() {
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [statusMessage, setStatusMessage] = useState("");
+  const [wsClient, setWsClient] = useState<WebSocketClient | null>(null);
 
   useEffect(() => {
     loadCall();
+    
+    return () => {
+      if (wsClient) {
+        wsClient.disconnect();
+      }
+    };
   }, [callId]);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    
-    if (analyzing) {
-      interval = setInterval(async () => {
-        try {
-          const status = await getAnalyzeStatus(callId);
-          setProgress(status.progress);
-          
-          if (status.status === "completed") {
-            setAnalyzing(false);
-            if (interval) clearInterval(interval);
-            await loadCall();
-          } else if (status.status === "failed") {
-            setAnalyzing(false);
-            if (interval) clearInterval(interval);
-            alert("Ошибка при анализе. Попробуйте еще раз.");
-            await loadCall();
-          }
-        } catch (error) {
-          console.error("Error checking status:", error);
+    if (analyzing && !wsClient) {
+      const client = new WebSocketClient(callId, (update) => {
+        setProgress(update.progress);
+        if (update.message) {
+          setStatusMessage(update.message);
         }
-      }, 2000);
+        
+        if (update.status === "completed") {
+          setAnalyzing(false);
+          client.disconnect();
+          setWsClient(null);
+          loadCall();
+        } else if (update.status === "failed") {
+          setAnalyzing(false);
+          client.disconnect();
+          setWsClient(null);
+          alert("Ошибка при анализе. Попробуйте еще раз.");
+          loadCall();
+        }
+      });
+      
+      client.connect();
+      setWsClient(client);
     }
     
     return () => {
-      if (interval) clearInterval(interval);
+      if (wsClient && !analyzing) {
+        wsClient.disconnect();
+        setWsClient(null);
+      }
     };
   }, [analyzing, callId]);
 
@@ -132,7 +145,7 @@ export default function CallDetailPage() {
             {analyzing && (
               <div className="mt-4">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-gray-600">Прогресс анализа</span>
+                  <span className="text-sm text-gray-600">{statusMessage || "Прогресс анализа"}</span>
                   <span className="text-sm text-gray-600">{progress}%</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2.5">
@@ -141,6 +154,9 @@ export default function CallDetailPage() {
                     style={{ width: `${progress}%` }}
                   ></div>
                 </div>
+                {wsClient && !wsClient.isConnected() && (
+                  <p className="text-xs text-yellow-600 mt-1">Переподключение...</p>
+                )}
               </div>
             )}
           </div>

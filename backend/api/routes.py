@@ -9,15 +9,14 @@ import uuid
 import csv
 import io
 import logging
-import asyncio
 import threading
-from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models import Call, Evaluation, SessionLocal, init_db
 from services.transcription_service import transcribe_audio
 from services.evaluation_service import evaluate_transcription
+from services.websocket_service import manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -92,7 +91,7 @@ async def upload_files(
     
     return {"calls": uploaded_calls}
 
-def update_progress(call_id: int, progress: int, status: str = None):
+def update_progress(call_id: int, progress: int, status: str = None, message: str = None):
     db_local = SessionLocal()
     try:
         call_local = db_local.query(Call).filter(Call.id == call_id).first()
@@ -105,15 +104,17 @@ def update_progress(call_id: int, progress: int, status: str = None):
         logger.error(f"Ошибка обновления прогресса: {e}")
     finally:
         db_local.close()
+    
+    manager.send_progress_sync(call_id, progress, status or "processing", message)
 
 def analyze_in_background(call_id: int, audio_path: str):
     try:
-        update_progress(call_id, 10, "processing")
+        update_progress(call_id, 10, "processing", "Начало транскрипции...")
         logger.info(f"Начало транскрипции файла {audio_path}")
         
         transcription = transcribe_audio(audio_path)
         
-        update_progress(call_id, 90, "processing")
+        update_progress(call_id, 90, "processing", "Транскрипция завершена, сохранение...")
         logger.info(f"Транскрипция завершена, длина текста: {len(transcription) if transcription else 0} символов")
         
         db_local = SessionLocal()
@@ -126,7 +127,7 @@ def analyze_in_background(call_id: int, audio_path: str):
         finally:
             db_local.close()
         
-        update_progress(call_id, 95, "processing")
+        update_progress(call_id, 95, "processing", "Начало оценки транскрипции...")
         logger.info("Начало оценки транскрипции")
         
         evaluation_result = evaluate_transcription(transcription)
@@ -151,6 +152,8 @@ def analyze_in_background(call_id: int, audio_path: str):
                 logger.info(f"Анализ звонка {call_id} успешно завершен")
         finally:
             db_local.close()
+        
+        update_progress(call_id, 100, "completed", "Анализ завершен")
             
     except Exception as e:
         import traceback
@@ -164,6 +167,7 @@ def analyze_in_background(call_id: int, audio_path: str):
                 db_local.commit()
         finally:
             db_local.close()
+        update_progress(call_id, 0, "failed", f"Ошибка: {str(e)}")
 
 @router.post("/analyze/{call_id}")
 async def analyze_call(call_id: int, db: Session = Depends(get_db)):

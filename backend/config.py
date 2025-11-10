@@ -5,6 +5,6 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./ai_coach.db")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-WHISPER_MODEL = os.getenv("WHISPER_MODEL", "tiny")
-ENABLE_DIARIZATION = os.getenv("ENABLE_DIARIZATION", "false").lower() == "true"
+GEMINI_TRANSCRIPTION_MODEL = os.getenv("GEMINI_TRANSCRIPTION_MODEL", "gemini-2.0-flash-exp")
+GEMINI_EVALUATION_MODEL = os.getenv("GEMINI_EVALUATION_MODEL", "gemini-2.0-flash")
 
