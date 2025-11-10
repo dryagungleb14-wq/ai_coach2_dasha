@@ -19,11 +19,14 @@ cd backend
 pip install -r requirements.txt
 ```
 
-Создайте файл `.env`:
+Создайте файл `backend/.env`:
 ```
-DATABASE_URL=postgresql://user:password@localhost:5432/ai_coach
+DATABASE_URL=sqlite:///./ai_coach.db
 GEMINI_API_KEY=your_gemini_api_key_here
+HUGGINGFACE_TOKEN=your_huggingface_token_here
 ```
+
+Для локальной разработки используется SQLite. Для продакшена настройте PostgreSQL.
 
 Запуск:
 ```bash
