@@ -9,13 +9,8 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip cache purge && \
     rm -rf /root/.cache/pip
 
-# Копируем все файлы из backend в /app
-COPY backend/api ./api
-COPY backend/services ./services
-COPY backend/utils ./utils
-COPY backend/models.py .
-COPY backend/config.py .
-COPY backend/main.py .
+# Копируем всю папку backend одной командой
+COPY backend/ .
 
 EXPOSE 8000
 
