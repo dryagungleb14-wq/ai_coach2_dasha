@@ -48,7 +48,8 @@ async def upload_files(
         try:
             file_id = str(uuid.uuid4())
             filename = f"{file_id}_{file.filename}"
-            uploads_dir = "uploads"
+            backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            uploads_dir = os.path.join(backend_dir, "uploads")
             os.makedirs(uploads_dir, exist_ok=True)
             file_path = os.path.join(uploads_dir, filename)
             
@@ -82,6 +83,10 @@ async def upload_files(
                 "call_date": call.call_date.isoformat() if call.call_date else None,
                 "call_identifier": call.call_identifier
             })
+            
+            thread = threading.Thread(target=analyze_in_background, args=(call.id, file_path), daemon=True)
+            thread.start()
+            logger.info(f"Автоматически запущен анализ для звонка {call.id}")
         except Exception as e:
             db.rollback()
             raise HTTPException(status_code=500, detail=f"Ошибка при загрузке файла {file.filename}: {str(e)}")
@@ -114,8 +119,11 @@ def analyze_in_background(call_id: int, audio_path: str):
         
         transcription = transcribe_audio(audio_path)
         
+        if not transcription or len(transcription.strip()) == 0:
+            raise Exception("Транскрипция пустая. Невозможно провести оценку.")
+        
         update_progress(call_id, 90, "processing", "Транскрипция завершена, сохранение...")
-        logger.info(f"Транскрипция завершена, длина текста: {len(transcription) if transcription else 0} символов")
+        logger.info(f"Транскрипция завершена, длина текста: {len(transcription)} символов")
         
         db_local = SessionLocal()
         try:

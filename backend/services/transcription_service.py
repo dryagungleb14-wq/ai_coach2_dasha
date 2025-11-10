@@ -42,7 +42,16 @@ def transcribe_audio(audio_path: str) -> str:
             )
         )
         
+        if not response:
+            raise Exception("Gemini API вернул пустой ответ")
+        
+        if not hasattr(response, 'text') or response.text is None:
+            raise Exception("Gemini API не вернул текст транскрипции")
+        
         transcription = response.text.strip()
+        
+        if not transcription or len(transcription) == 0:
+            raise Exception("Транскрипция пустая. Возможно, аудио файл не содержит речи или произошла ошибка при обработке.")
         
         try:
             genai.delete_file(audio_file.name)

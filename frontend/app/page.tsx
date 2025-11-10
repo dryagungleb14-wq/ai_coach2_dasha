@@ -1,19 +1,42 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import AudioUpload from "@/components/AudioUpload";
 import { getCalls, Call, exportCalls, checkBackendHealth } from "@/lib/api";
+import { WebSocketClient } from "@/lib/websocket";
+
+interface AnalysisProgress {
+  callId: number;
+  progress: number;
+  status: string;
+  message?: string;
+}
 
 export default function Home() {
   const router = useRouter();
   const [recentCalls, setRecentCalls] = useState<Call[]>([]);
   const [backendStatus, setBackendStatus] = useState<{ status: boolean; message: string; url: string } | null>(null);
   const [isCheckingBackend, setIsCheckingBackend] = useState(true);
+  const [analyzingCalls, setAnalyzingCalls] = useState<Map<number, AnalysisProgress>>(new Map());
+  const wsClientsRef = useRef<Map<number, WebSocketClient>>(new Map());
 
   useEffect(() => {
     checkBackend();
     loadRecentCalls();
+    
+    return () => {
+      wsClientsRef.current.forEach(client => client.disconnect());
+      wsClientsRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadRecentCalls();
+    }, 5000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const checkBackend = async () => {
@@ -34,6 +57,48 @@ export default function Home() {
 
   const handleUploadComplete = () => {
     loadRecentCalls();
+  };
+
+  const handleAnalysisStarted = (callIds: number[]) => {
+    callIds.forEach(callId => {
+      const client = new WebSocketClient(callId, (update) => {
+        setAnalyzingCalls(prev => {
+          const newMap = new Map(prev);
+          newMap.set(callId, {
+            callId,
+            progress: update.progress,
+            status: update.status,
+            message: update.message
+          });
+          return newMap;
+        });
+        
+        if (update.status === "completed" || update.status === "failed") {
+          client.disconnect();
+          wsClientsRef.current.delete(callId);
+          setAnalyzingCalls(prev => {
+            const newMap = new Map(prev);
+            newMap.delete(callId);
+            return newMap;
+          });
+          loadRecentCalls();
+        }
+      });
+      
+      client.connect();
+      wsClientsRef.current.set(callId, client);
+      
+      setAnalyzingCalls(prev => {
+        const newMap = new Map(prev);
+        newMap.set(callId, {
+          callId,
+          progress: 0,
+          status: "processing",
+          message: "Начало анализа..."
+        });
+        return newMap;
+      });
+    });
   };
 
   return (
@@ -63,8 +128,36 @@ export default function Home() {
         ) : null}
 
         <div className="mb-8">
-          <AudioUpload onUploadComplete={handleUploadComplete} />
+          <AudioUpload onUploadComplete={handleUploadComplete} onAnalysisStarted={handleAnalysisStarted} />
         </div>
+
+        {analyzingCalls.size > 0 && (
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold mb-4">Анализ в процессе</h2>
+            <div className="space-y-3">
+              {Array.from(analyzingCalls.values()).map((progress) => {
+                const call = recentCalls.find(c => c.id === progress.callId);
+                return (
+                  <div key={progress.callId} className="p-4 border border-gray-200 rounded">
+                    <div className="flex justify-between items-center mb-2">
+                      <p className="font-medium">{call?.filename || `Звонок #${progress.callId}`}</p>
+                      <span className="text-sm text-gray-600">{progress.progress}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+                      <div
+                        className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                        style={{ width: `${progress.progress}%` }}
+                      ></div>
+                    </div>
+                    {progress.message && (
+                      <p className="text-sm text-gray-600">{progress.message}</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="mb-4 flex gap-4">
           <button

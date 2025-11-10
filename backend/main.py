@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.routes import router
 from models import init_db
 from services.websocket_service import manager
+from config import GEMINI_API_KEY, DATABASE_URL
 
 logging.basicConfig(
     level=logging.INFO,
@@ -52,6 +53,16 @@ async def websocket_analyze(websocket: WebSocket, call_id: int):
 @app.on_event("startup")
 async def startup_event():
     try:
+        if not GEMINI_API_KEY or GEMINI_API_KEY.strip() == "":
+            logger.warning("GEMINI_API_KEY не установлен или пустой. Транскрипция и оценка не будут работать.")
+        else:
+            logger.info("GEMINI_API_KEY настроен")
+        
+        if not DATABASE_URL or DATABASE_URL.strip() == "":
+            logger.warning("DATABASE_URL не установлен. Используется значение по умолчанию.")
+        else:
+            logger.info("DATABASE_URL настроен")
+        
         init_db()
         logger.info("База данных инициализирована")
         import asyncio
@@ -75,4 +86,13 @@ def health_check():
 @app.get("/api/health")
 def api_health_check():
     return {"status": "healthy", "message": "AI Coach API is running"}
+
+@app.get("/api/config/check")
+def check_config():
+    config_status = {
+        "gemini_api_key": "configured" if GEMINI_API_KEY and GEMINI_API_KEY.strip() != "" else "missing",
+        "database_url": "configured" if DATABASE_URL and DATABASE_URL.strip() != "" else "missing",
+        "status": "ok" if (GEMINI_API_KEY and GEMINI_API_KEY.strip() != "") and (DATABASE_URL and DATABASE_URL.strip() != "") else "incomplete"
+    }
+    return config_status
 

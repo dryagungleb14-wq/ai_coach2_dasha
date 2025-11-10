@@ -5,9 +5,10 @@ import { uploadFiles, Call } from "@/lib/api";
 
 interface AudioUploadProps {
   onUploadComplete: (calls: Call[]) => void;
+  onAnalysisStarted?: (callIds: number[]) => void;
 }
 
-export default function AudioUpload({ onUploadComplete }: AudioUploadProps) {
+export default function AudioUpload({ onUploadComplete, onAnalysisStarted }: AudioUploadProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [manager, setManager] = useState("");
   const [callDate, setCallDate] = useState("");
@@ -39,6 +40,12 @@ export default function AudioUpload({ onUploadComplete }: AudioUploadProps) {
     try {
       const calls = await uploadFiles(files, manager || undefined, callDate || undefined, callIdentifier || undefined);
       onUploadComplete(calls);
+      
+      if (onAnalysisStarted && calls.length > 0) {
+        const callIds = calls.map(call => call.id);
+        onAnalysisStarted(callIds);
+      }
+      
       setFiles([]);
       setManager("");
       setCallDate("");

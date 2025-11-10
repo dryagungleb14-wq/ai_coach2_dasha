@@ -28,6 +28,9 @@ def normalize_scores(scores_data: dict) -> dict:
     return scores_data
 
 def evaluate_transcription(transcription: str) -> dict:
+    if not transcription or len(transcription.strip()) == 0:
+        raise ValueError("Транскрипция пустая. Невозможно провести оценку.")
+    
     prompt = get_checklist_prompt()
     full_prompt = f"{prompt}\n\nРасшифровка звонка:\n\n{transcription}\n\nОцени звонок по чек-листу и верни JSON."
     
@@ -44,6 +47,12 @@ def evaluate_transcription(transcription: str) -> dict:
             )
         )
         
+        if not response:
+            raise Exception("Gemini API вернул пустой ответ при оценке")
+        
+        if not hasattr(response, 'text') or response.text is None:
+            raise Exception("Gemini API не вернул текст оценки")
+        
         response_text = response.text.strip()
         
         logger.info(f"Ответ модели (первые 300 символов): {response_text[:300]}")
@@ -58,7 +67,10 @@ def evaluate_transcription(transcription: str) -> dict:
         except json.JSONDecodeError as e:
             logger.error(f"Ошибка парсинга JSON: {e}")
             logger.error(f"Полный ответ модели: {response_text}")
-            scores_data = {}
+            raise Exception(f"Не удалось распарсить JSON ответ от модели. Ответ: {response_text[:500]}")
+        
+        if not scores_data or not isinstance(scores_data, dict) or len(scores_data) == 0:
+            raise Exception("Модель вернула пустой словарь оценок")
         
         scores_data = normalize_scores(scores_data)
         
@@ -68,7 +80,7 @@ def evaluate_transcription(transcription: str) -> dict:
         logger.error(f"Ошибка при оценке: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        scores_data = {}
+        raise
     
     violations = scores_data.get("9", {}).get("violation", False)
     
