@@ -3,15 +3,25 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AudioUpload from "@/components/AudioUpload";
-import { getCalls, Call, exportCalls } from "@/lib/api";
+import { getCalls, Call, exportCalls, checkBackendHealth } from "@/lib/api";
 
 export default function Home() {
   const router = useRouter();
   const [recentCalls, setRecentCalls] = useState<Call[]>([]);
+  const [backendStatus, setBackendStatus] = useState<{ status: boolean; message: string; url: string } | null>(null);
+  const [isCheckingBackend, setIsCheckingBackend] = useState(true);
 
   useEffect(() => {
+    checkBackend();
     loadRecentCalls();
   }, []);
+
+  const checkBackend = async () => {
+    setIsCheckingBackend(true);
+    const health = await checkBackendHealth();
+    setBackendStatus(health);
+    setIsCheckingBackend(false);
+  };
 
   const loadRecentCalls = async () => {
     try {
@@ -30,6 +40,27 @@ export default function Home() {
     <div className="min-h-screen bg-white">
       <div className="w-full max-w-6xl mx-auto p-6">
         <h1 className="text-3xl font-semibold mb-6">AI Coach - Анализ звонков</h1>
+
+        {isCheckingBackend ? (
+          <div className="mb-4 p-4 bg-gray-100 rounded">
+            <p className="text-gray-600">Проверка подключения к бэкенду...</p>
+          </div>
+        ) : backendStatus && !backendStatus.status ? (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded">
+            <p className="text-red-800 font-semibold mb-2">⚠️ Проблема с подключением к бэкенду</p>
+            <p className="text-red-700 text-sm mb-2">{backendStatus.message}</p>
+            <button
+              onClick={checkBackend}
+              className="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700"
+            >
+              Проверить снова
+            </button>
+          </div>
+        ) : backendStatus && backendStatus.status ? (
+          <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded">
+            <p className="text-green-800 text-sm">✅ Бэкенд доступен: {backendStatus.url}</p>
+          </div>
+        ) : null}
 
         <div className="mb-8">
           <AudioUpload onUploadComplete={handleUploadComplete} />

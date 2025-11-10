@@ -23,7 +23,8 @@ app = FastAPI(title="AI Coach API", version="1.0.0")
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
-    logger.info(f"Входящий запрос: {request.method} {request.url.path}")
+    origin = request.headers.get("origin", "не указан")
+    logger.info(f"Входящий запрос: {request.method} {request.url.path} | Origin: {origin}")
     response = await call_next(request)
     process_time = time.time() - start_time
     logger.info(f"Запрос {request.method} {request.url.path} выполнен за {process_time:.2f}с, статус: {response.status_code}")
@@ -70,4 +71,8 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+@app.get("/api/health")
+def api_health_check():
+    return {"status": "healthy", "message": "AI Coach API is running"}
 

@@ -1,5 +1,9 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+  console.log("API URL:", API_URL);
+}
+
 export interface Call {
   id: number;
   filename: string;
@@ -27,6 +31,43 @@ export interface Evaluation {
   комментарии: string;
   is_retest: boolean;
   created_at: string;
+}
+
+export async function checkBackendHealth(): Promise<{ status: boolean; message: string; url: string }> {
+  try {
+    const response = await fetch(`${API_URL}/health`, {
+      method: "GET",
+      signal: AbortSignal.timeout(5000),
+    });
+    
+    if (response.ok) {
+      return { status: true, message: "Бэкенд доступен", url: API_URL };
+    } else {
+      return { 
+        status: false, 
+        message: `Бэкенд вернул ошибку: ${response.status}`, 
+        url: API_URL 
+      };
+    }
+  } catch (error: any) {
+    const errorMessage = error.name === "AbortError" 
+      ? "Таймаут подключения к бэкенду"
+      : error.message?.includes("Failed to fetch")
+      ? "Не удалось подключиться к бэкенду"
+      : error.message || "Неизвестная ошибка";
+    
+    console.error("Backend health check failed:", {
+      error: errorMessage,
+      url: API_URL,
+      errorDetails: error
+    });
+    
+    return { 
+      status: false, 
+      message: `${errorMessage}. URL: ${API_URL}`, 
+      url: API_URL 
+    };
+  }
 }
 
 export async function uploadFiles(
@@ -66,46 +107,91 @@ export async function uploadFiles(
     const data = await response.json();
     return data.calls;
   } catch (error: any) {
-    if (error.message.includes("Failed to fetch")) {
-      throw new Error("Не удалось подключиться к серверу. Убедитесь, что бэкенд запущен.");
+    console.error("Upload error:", {
+      error: error.message,
+      url: `${API_URL}/api/upload`,
+      errorDetails: error
+    });
+    
+    if (error.message?.includes("Failed to fetch") || error.name === "TypeError") {
+      throw new Error(`Не удалось подключиться к серверу по адресу ${API_URL}. Убедитесь, что бэкенд запущен и доступен.`);
     }
     throw error;
   }
 }
 
 export async function analyzeCall(callId: number): Promise<any> {
-  const response = await fetch(`${API_URL}/api/analyze/${callId}`, {
-    method: "POST",
-  });
-  
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Analysis failed: ${response.status} - ${errorText}`);
+  try {
+    const response = await fetch(`${API_URL}/api/analyze/${callId}`, {
+      method: "POST",
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Analysis failed: ${response.status} - ${errorText}`);
+    }
+    
+    return response.json();
+  } catch (error: any) {
+    console.error("Analyze error:", {
+      error: error.message,
+      url: `${API_URL}/api/analyze/${callId}`,
+      errorDetails: error
+    });
+    
+    if (error.message?.includes("Failed to fetch") || error.name === "TypeError") {
+      throw new Error(`Не удалось подключиться к серверу по адресу ${API_URL}. Убедитесь, что бэкенд запущен и доступен.`);
+    }
+    throw error;
   }
-  
-  return response.json();
 }
 
 export async function getAnalyzeStatus(callId: number): Promise<{status: string, progress: number}> {
-  const response = await fetch(`${API_URL}/api/analyze/${callId}/status`);
-  
-  if (!response.ok) {
-    throw new Error(`Failed to get status: ${response.status}`);
+  try {
+    const response = await fetch(`${API_URL}/api/analyze/${callId}/status`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to get status: ${response.status}`);
+    }
+    
+    return response.json();
+  } catch (error: any) {
+    console.error("Get status error:", {
+      error: error.message,
+      url: `${API_URL}/api/analyze/${callId}/status`,
+      errorDetails: error
+    });
+    
+    if (error.message?.includes("Failed to fetch") || error.name === "TypeError") {
+      throw new Error(`Не удалось подключиться к серверу по адресу ${API_URL}. Убедитесь, что бэкенд запущен и доступен.`);
+    }
+    throw error;
   }
-  
-  return response.json();
 }
 
 export async function retestCall(callId: number): Promise<any> {
-  const response = await fetch(`${API_URL}/api/analyze/${callId}/retest`, {
-    method: "POST",
-  });
-  
-  if (!response.ok) {
-    throw new Error("Retest failed");
+  try {
+    const response = await fetch(`${API_URL}/api/analyze/${callId}/retest`, {
+      method: "POST",
+    });
+    
+    if (!response.ok) {
+      throw new Error("Retest failed");
+    }
+    
+    return response.json();
+  } catch (error: any) {
+    console.error("Retest error:", {
+      error: error.message,
+      url: `${API_URL}/api/analyze/${callId}/retest`,
+      errorDetails: error
+    });
+    
+    if (error.message?.includes("Failed to fetch") || error.name === "TypeError") {
+      throw new Error(`Не удалось подключиться к серверу по адресу ${API_URL}. Убедитесь, что бэкенд запущен и доступен.`);
+    }
+    throw error;
   }
-  
-  return response.json();
 }
 
 export async function getCalls(
@@ -128,9 +214,14 @@ export async function getCalls(
     const data = await response.json();
     return data.calls;
   } catch (error: any) {
-    console.error("Error fetching calls:", error);
-    if (error.message.includes("Failed to fetch")) {
-      throw new Error("Не удалось подключиться к серверу. Убедитесь, что бэкенд запущен.");
+    console.error("Error fetching calls:", {
+      error: error.message,
+      url: `${API_URL}/api/calls`,
+      errorDetails: error
+    });
+    
+    if (error.message?.includes("Failed to fetch") || error.name === "TypeError") {
+      throw new Error(`Не удалось подключиться к серверу по адресу ${API_URL}. Убедитесь, что бэкенд запущен и доступен.`);
     }
     throw error;
   }
@@ -146,9 +237,14 @@ export async function getCall(callId: number): Promise<CallDetail> {
     
     return response.json();
   } catch (error: any) {
-    console.error("Error fetching call:", error);
-    if (error.message.includes("Failed to fetch")) {
-      throw new Error("Не удалось подключиться к серверу. Убедитесь, что бэкенд запущен.");
+    console.error("Error fetching call:", {
+      error: error.message,
+      url: `${API_URL}/api/calls/${callId}`,
+      errorDetails: error
+    });
+    
+    if (error.message?.includes("Failed to fetch") || error.name === "TypeError") {
+      throw new Error(`Не удалось подключиться к серверу по адресу ${API_URL}. Убедитесь, что бэкенд запущен и доступен.`);
     }
     throw error;
   }
@@ -165,9 +261,14 @@ export async function exportCall(callId: number): Promise<Blob> {
     
     return response.blob();
   } catch (error: any) {
-    console.error("Error exporting call:", error);
-    if (error.message.includes("Failed to fetch")) {
-      throw new Error("Не удалось подключиться к серверу. Убедитесь, что бэкенд запущен.");
+    console.error("Error exporting call:", {
+      error: error.message,
+      url: `${API_URL}/api/export/${callId}`,
+      errorDetails: error
+    });
+    
+    if (error.message?.includes("Failed to fetch") || error.name === "TypeError") {
+      throw new Error(`Не удалось подключиться к серверу по адресу ${API_URL}. Убедитесь, что бэкенд запущен и доступен.`);
     }
     throw error;
   }
@@ -193,9 +294,14 @@ export async function exportCalls(
     
     return response.blob();
   } catch (error: any) {
-    console.error("Error exporting calls:", error);
-    if (error.message.includes("Failed to fetch")) {
-      throw new Error("Не удалось подключиться к серверу. Убедитесь, что бэкенд запущен.");
+    console.error("Error exporting calls:", {
+      error: error.message,
+      url: `${API_URL}/api/export`,
+      errorDetails: error
+    });
+    
+    if (error.message?.includes("Failed to fetch") || error.name === "TypeError") {
+      throw new Error(`Не удалось подключиться к серверу по адресу ${API_URL}. Убедитесь, что бэкенд запущен и доступен.`);
     }
     throw error;
   }
