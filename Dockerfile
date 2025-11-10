@@ -2,13 +2,20 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY backend/requirements.txt .
+# Копируем requirements.txt из backend
+COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt && \
     pip cache purge && \
     rm -rf /root/.cache/pip
 
-COPY backend/ .
+# Копируем все файлы из backend в /app
+COPY backend/api ./api
+COPY backend/services ./services
+COPY backend/utils ./utils
+COPY backend/models.py .
+COPY backend/config.py .
+COPY backend/main.py .
 
 EXPOSE 8000
 
