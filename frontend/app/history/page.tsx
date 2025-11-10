@@ -70,40 +70,42 @@ export default function HistoryPage() {
 
       <h1 className="text-2xl font-semibold mb-6">История звонков</h1>
 
-      <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
-        <input
-          type="text"
-          value={manager}
-          onChange={(e) => setManager(e.target.value)}
-          placeholder="Менеджер"
-          className="px-3 py-2 border border-gray-300 rounded"
-        />
-        <input
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-          placeholder="Дата начала"
-          className="px-3 py-2 border border-gray-300 rounded"
-        />
-        <input
-          type="date"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-          placeholder="Дата окончания"
-          className="px-3 py-2 border border-gray-300 rounded"
-        />
+      <div className="mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <input
+            type="text"
+            value={manager}
+            onChange={(e) => setManager(e.target.value)}
+            placeholder="Менеджер"
+            className="px-3 py-2 border border-gray-300 rounded"
+          />
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            placeholder="Дата начала"
+            className="px-3 py-2 border border-gray-300 rounded"
+          />
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            placeholder="Дата окончания"
+            className="px-3 py-2 border border-gray-300 rounded"
+          />
+        </div>
         <div className="flex gap-2">
           <button
             onClick={handleFilter}
             className="px-4 py-2 bg-black text-white rounded"
           >
-            Фильтр
+            Применить фильтр
           </button>
           <button
             onClick={handleExport}
-            className="px-4 py-2 bg-gray-600 text-white rounded"
+            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
           >
-            Экспорт
+            📥 Экспорт в CSV
           </button>
         </div>
       </div>

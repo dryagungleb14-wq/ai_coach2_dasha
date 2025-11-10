@@ -1,32 +1,73 @@
 import google.generativeai as genai
 import json
-import sys
 import os
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import logging
 
 from utils.checklist import get_checklist_prompt
 from config import GEMINI_API_KEY
 
 genai.configure(api_key=GEMINI_API_KEY)
 
+logger = logging.getLogger(__name__)
+
+def normalize_scores(scores_data: dict) -> dict:
+    valid_scores = {0, 5, 10}
+    
+    for key, value in scores_data.items():
+        if isinstance(value, dict):
+            if "score" in value:
+                score = value["score"]
+                if isinstance(score, (int, float)):
+                    if score not in valid_scores:
+                        closest = min(valid_scores, key=lambda x: abs(x - score))
+                        logger.warning(f"Нормализация балла {key}: {score} -> {closest}")
+                        value["score"] = closest
+            elif "violation" in value and key == "9":
+                continue
+    
+    return scores_data
+
 def evaluate_transcription(transcription: str) -> dict:
     prompt = get_checklist_prompt()
     full_prompt = f"{prompt}\n\nРасшифровка звонка:\n\n{transcription}\n\nОцени звонок по чек-листу и верни JSON."
     
-    model = genai.GenerativeModel('gemini-2.0-flash')
-    response = model.generate_content(full_prompt)
-    
-    response_text = response.text.strip()
-    
-    if "```json" in response_text:
-        response_text = response_text.split("```json")[1].split("```")[0].strip()
-    elif "```" in response_text:
-        response_text = response_text.split("```")[1].split("```")[0].strip()
-    
     try:
-        scores_data = json.loads(response_text)
-    except json.JSONDecodeError:
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        response = model.generate_content(
+            full_prompt,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0,
+                top_p=1.0,
+                top_k=1,
+                max_output_tokens=8192,
+                response_mime_type="application/json"
+            )
+        )
+        
+        response_text = response.text.strip()
+        
+        logger.info(f"Ответ модели (первые 300 символов): {response_text[:300]}")
+        
+        if "```json" in response_text:
+            response_text = response_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in response_text:
+            response_text = response_text.split("```")[1].split("```")[0].strip()
+        
+        try:
+            scores_data = json.loads(response_text)
+        except json.JSONDecodeError as e:
+            logger.error(f"Ошибка парсинга JSON: {e}")
+            logger.error(f"Полный ответ модели: {response_text}")
+            scores_data = {}
+        
+        scores_data = normalize_scores(scores_data)
+        
+        logger.info(f"Итоговые баллы: {json.dumps({k: v.get('score', v.get('violation', 'N/A')) for k, v in scores_data.items()}, ensure_ascii=False)}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка при оценке: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         scores_data = {}
     
     violations = scores_data.get("9", {}).get("violation", False)
@@ -44,10 +85,14 @@ def evaluate_transcription(transcription: str) -> dict:
         if isinstance(value, dict) and "comment" in value:
             comments[key] = value["comment"]
     
-    return {
+    result = {
         "scores": scores_data,
         "итоговая_оценка": total_score,
         "нарушения": violations,
         "комментарии": json.dumps(comments, ensure_ascii=False)
     }
+    
+    logger.info(f"Итоговая оценка: {total_score}")
+    
+    return result
 

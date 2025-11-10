@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
@@ -308,7 +308,15 @@ async def export_calls(
         
         scores = latest_evaluation.scores or {}
         evaluation_date = latest_evaluation.created_at
-        month = evaluation_date.strftime("%Y-%m") if evaluation_date else ""
+        
+        month_names = {
+            1: "январь", 2: "февраль", 3: "март", 4: "апрель",
+            5: "май", 6: "июнь", 7: "июль", 8: "август",
+            9: "сентябрь", 10: "октябрь", 11: "ноябрь", 12: "декабрь"
+        }
+        month = ""
+        if evaluation_date:
+            month = month_names.get(evaluation_date.month, "")
         
         violation_text = "FALSE"
         if latest_evaluation.нарушения:
@@ -343,10 +351,101 @@ async def export_calls(
         writer.writerow(row)
     
     output.seek(0)
-    return FileResponse(
-        path=None,
-        media_type="text/csv",
-        filename=f"calls_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-        content=output.getvalue().encode("utf-8-sig")
+    csv_content = output.getvalue().encode("utf-8-sig")
+    
+    return Response(
+        content=csv_content,
+        media_type="text/csv; charset=utf-8-sig",
+        headers={
+            "Content-Disposition": f'attachment; filename="calls_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+        }
+    )
+
+@router.get("/export/{call_id}")
+async def export_call(call_id: int, db: Session = Depends(get_db)):
+    call = db.query(Call).filter(Call.id == call_id).first()
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    
+    latest_evaluation = db.query(Evaluation).filter(
+        Evaluation.call_id == call_id
+    ).order_by(Evaluation.created_at.desc()).first()
+    
+    if not latest_evaluation:
+        raise HTTPException(status_code=400, detail="No evaluation found for this call")
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    writer.writerow([
+        "Номер", "Дата звонка", "Дата оценки", "Месяц оценки", "Длительность звонка", "Менеджер",
+        "Установление контакта", "", "Диагностика", "", "Продажа", "", "Презентация", "",
+        "Работа с возражениями", "", "Завершение", "", "", "", "Итоговая оценка"
+    ])
+    
+    writer.writerow([
+        "", "", "", "", "", "",
+        "1.1 Приветствие", "1.2 Наличие техники",
+        "2.1 Выявление цели, боли", "2.2 Критерии обучения",
+        "3.1 Запись на пробное", "3.2 Повторная связь",
+        "4.1 Презентация формата", "4.2 Презентация до пробного",
+        "5.1 Выявление возражений", "5.2 Отработка возражений",
+        "6. Контрольные точки", "7. Корректность сделки", "8. Грамотность", "9. Нарушения",
+        ""
+    ])
+    
+    scores = latest_evaluation.scores or {}
+    evaluation_date = latest_evaluation.created_at
+    
+    month_names = {
+        1: "январь", 2: "февраль", 3: "март", 4: "апрель",
+        5: "май", 6: "июнь", 7: "июль", 8: "август",
+        9: "сентябрь", 10: "октябрь", 11: "ноябрь", 12: "декабрь"
+    }
+    month = ""
+    if evaluation_date:
+        month = month_names.get(evaluation_date.month, "")
+    
+    violation_text = "FALSE"
+    if latest_evaluation.нарушения:
+        violation_text = "TRUE"
+    elif scores.get("9", {}).get("violation", False):
+        violation_text = "TRUE"
+    
+    row = [
+        1,
+        call.call_date.strftime("%Y-%m-%d") if call.call_date else "",
+        evaluation_date.strftime("%Y-%m-%d %H:%M:%S") if evaluation_date else "",
+        month,
+        call.duration or "",
+        call.manager or "",
+        scores.get("1.1", {}).get("score", ""),
+        scores.get("1.2", {}).get("score", ""),
+        scores.get("2.1", {}).get("score", ""),
+        scores.get("2.2", {}).get("score", ""),
+        scores.get("3.1", {}).get("score", ""),
+        scores.get("3.2", {}).get("score", ""),
+        scores.get("4.1", {}).get("score", ""),
+        scores.get("4.2", {}).get("score", ""),
+        scores.get("5.1", {}).get("score", ""),
+        scores.get("5.2", {}).get("score", ""),
+        scores.get("6", {}).get("score", ""),
+        scores.get("7", {}).get("score", ""),
+        scores.get("8", {}).get("score", ""),
+        violation_text,
+        latest_evaluation.итоговая_оценка or ""
+    ]
+    
+    writer.writerow(row)
+    
+    output.seek(0)
+    csv_content = output.getvalue().encode("utf-8-sig")
+    
+    return Response(
+        content=csv_content,
+        media_type="text/csv; charset=utf-8-sig",
+        headers={
+            "Content-Disposition": f'attachment; filename="call_{call_id}_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+        }
     )
 

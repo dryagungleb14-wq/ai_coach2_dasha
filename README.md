@@ -10,11 +10,7 @@
 - **Расшифровка**: Whisper `base` модель
 - **Оценка**: Google Gemini API
 
-## Быстрый старт
-
-См. [DEPLOY.md](./DEPLOY.md) для инструкций по деплою на Vercel и Railway.
-
-## Локальная разработка
+## Установка
 
 ### Бэкенд
 
@@ -25,7 +21,7 @@ pip install -r requirements.txt
 
 Создайте файл `.env`:
 ```
-DATABASE_URL=sqlite:///./ai_coach.db
+DATABASE_URL=postgresql://user:password@localhost:5432/ai_coach
 GEMINI_API_KEY=your_gemini_api_key_here
 ```
 

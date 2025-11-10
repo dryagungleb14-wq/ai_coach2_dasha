@@ -8,13 +8,21 @@ __pycache__/
 *.pyc
 .venv/
 venv/
-*.db
-*.sqlite
+
+backend/.env
 backend/uploads/
+backend/*.db
 backend/test.db
+backend/ai_coach.db
 backend/__pycache__/
 backend/**/__pycache__/
+backend/**/*.pyc
+
 frontend/.next/
 frontend/node_modules/
+frontend/.env.local
+
+*.log
+/tmp/
 
 

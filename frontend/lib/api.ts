@@ -129,22 +129,50 @@ export async function getCall(callId: number): Promise<CallDetail> {
   }
 }
 
+export async function exportCall(callId: number): Promise<Blob> {
+  try {
+    const response = await fetch(`${API_URL}/api/export/${callId}`);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Export failed: ${response.status} - ${errorText}`);
+    }
+    
+    return response.blob();
+  } catch (error: any) {
+    console.error("Error exporting call:", error);
+    if (error.message.includes("Failed to fetch")) {
+      throw new Error("Не удалось подключиться к серверу. Убедитесь, что бэкенд запущен.");
+    }
+    throw error;
+  }
+}
+
 export async function exportCalls(
   manager?: string,
   startDate?: string,
   endDate?: string
 ): Promise<Blob> {
-  const params = new URLSearchParams();
-  if (manager) params.append("manager", manager);
-  if (startDate) params.append("start_date", startDate);
-  if (endDate) params.append("end_date", endDate);
-  
-  const response = await fetch(`${API_URL}/api/export?${params.toString()}`);
-  
-  if (!response.ok) {
-    throw new Error("Export failed");
+  try {
+    const params = new URLSearchParams();
+    if (manager) params.append("manager", manager);
+    if (startDate) params.append("start_date", startDate);
+    if (endDate) params.append("end_date", endDate);
+    
+    const response = await fetch(`${API_URL}/api/export?${params.toString()}`);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Export failed: ${response.status} - ${errorText}`);
+    }
+    
+    return response.blob();
+  } catch (error: any) {
+    console.error("Error exporting calls:", error);
+    if (error.message.includes("Failed to fetch")) {
+      throw new Error("Не удалось подключиться к серверу. Убедитесь, что бэкенд запущен.");
+    }
+    throw error;
   }
-  
-  return response.blob();
 }
 

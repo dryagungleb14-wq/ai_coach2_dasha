@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AudioUpload from "@/components/AudioUpload";
-import { getCalls, Call } from "@/lib/api";
+import { getCalls, Call, exportCalls } from "@/lib/api";
 
 export default function Home() {
   const router = useRouter();
@@ -41,6 +41,27 @@ export default function Home() {
             className="px-4 py-2 bg-gray-600 text-white rounded"
           >
             История звонков
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                const blob = await exportCalls();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `calls_export_${new Date().toISOString().split("T")[0]}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+              } catch (error: any) {
+                console.error("Error exporting:", error);
+                alert(`Ошибка экспорта: ${error?.message || "Неизвестная ошибка"}`);
+              }
+            }}
+            className="px-4 py-2 bg-gray-600 text-white rounded"
+          >
+            📥 Экспорт в CSV
           </button>
         </div>
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getCall, analyzeCall, retestCall, CallDetail } from "@/lib/api";
+import { getCall, analyzeCall, retestCall, CallDetail, exportCall } from "@/lib/api";
 import EvaluationTable from "@/components/EvaluationTable";
 
 export default function CallDetailPage() {
@@ -98,15 +98,38 @@ export default function CallDetailPage() {
             {analyzing ? "Анализ..." : "Запустить анализ"}
           </button>
         ) : (
-          <>
+          <div className="flex gap-2">
             <button
               onClick={handleRetest}
               disabled={analyzing}
-              className="px-4 py-2 bg-gray-600 text-white rounded disabled:bg-gray-400 mr-2"
+              className="px-4 py-2 bg-gray-600 text-white rounded disabled:bg-gray-400"
             >
               {analyzing ? "Проверка..." : "Повторная проверка"}
             </button>
-          </>
+            {latestEvaluation && (
+              <button
+                onClick={async () => {
+                  try {
+                    const blob = await exportCall(callId);
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `call_${callId}_export_${new Date().toISOString().split("T")[0]}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                  } catch (error: any) {
+                    console.error("Error exporting:", error);
+                    alert(`Ошибка экспорта: ${error?.message || "Неизвестная ошибка"}`);
+                  }
+                }}
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                📥 Экспорт в CSV
+              </button>
+            )}
+          </div>
         )}
       </div>
 
