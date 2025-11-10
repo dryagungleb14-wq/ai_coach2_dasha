@@ -82,8 +82,6 @@ def transcribe_audio(audio_path: str, enable_diarization: bool = None) -> str:
         result = model.transcribe(
             compressed_path,
             language="ru",
-            fp16=False,
-            device="cpu",
             verbose=False,
             task="transcribe"
         )
