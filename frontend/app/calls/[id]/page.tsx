@@ -45,7 +45,8 @@ export default function CallDetailPage() {
           setAnalyzing(false);
           client.disconnect();
           setWsClient(null);
-          alert("Ошибка при анализе. Попробуйте еще раз.");
+          const errorMessage = update.message || "Ошибка при анализе. Попробуйте еще раз.";
+          alert(errorMessage);
           loadCall();
         }
       });

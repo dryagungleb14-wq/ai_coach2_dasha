@@ -5,6 +5,11 @@ import time
 from dotenv import load_dotenv
 from config import GEMINI_API_KEY, GEMINI_TRANSCRIPTION_MODEL
 
+try:
+    from google.api_core import exceptions as google_exceptions
+except ImportError:
+    google_exceptions = None
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -63,6 +68,26 @@ def transcribe_audio(audio_path: str) -> str:
         return transcription
         
     except Exception as e:
+        error_msg = str(e)
+        is_resource_exhausted = False
+        
+        if google_exceptions and isinstance(e, google_exceptions.ResourceExhausted):
+            is_resource_exhausted = True
+        elif "ResourceExhausted" in str(type(e)) or "429" in error_msg or "quota" in error_msg.lower():
+            is_resource_exhausted = True
+        
+        if is_resource_exhausted:
+            if "limit: 0" in error_msg or "free_tier" in error_msg.lower():
+                user_message = "Модель недоступна на бесплатном тарифе Gemini API. Пожалуйста, используйте другую модель или перейдите на платный тариф."
+            elif "quota" in error_msg.lower() or "limit" in error_msg.lower():
+                user_message = f"Превышена квота Gemini API. {error_msg}"
+            else:
+                user_message = f"Ошибка квоты Gemini API: {error_msg}"
+            logger.error(f"Ошибка при выполнении транскрипции через Gemini (429): {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            raise Exception(user_message) from e
+        
         logger.error(f"Ошибка при выполнении транскрипции через Gemini: {e}")
         import traceback
         logger.error(traceback.format_exc())

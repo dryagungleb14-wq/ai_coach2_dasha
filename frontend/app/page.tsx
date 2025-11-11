@@ -74,6 +74,9 @@ export default function Home() {
         });
         
         if (update.status === "completed" || update.status === "failed") {
+          if (update.status === "failed" && update.message) {
+            alert(update.message);
+          }
           client.disconnect();
           wsClientsRef.current.delete(callId);
           setAnalyzingCalls(prev => {
@@ -150,7 +153,9 @@ export default function Home() {
                       ></div>
                     </div>
                     {progress.message && (
-                      <p className="text-sm text-gray-600">{progress.message}</p>
+                      <p className={`text-sm ${progress.status === "failed" ? "text-red-600 font-semibold" : "text-gray-600"}`}>
+                        {progress.message}
+                      </p>
                     )}
                   </div>
                 );
